@@ -1,0 +1,104 @@
+---
+title: "Nature index data entry tutorial"
+author: "Chloé R. Nater"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## About this tutorial
+
+This short tutorial is intended for people that want to upload new and/or updated indicator data to the Nature index database (<https://naturindeks.nina.no/>) using R. Data can also be uploaded to the database manually, but for code-based workflows it is worthwhile to incorporate the data upload into the scripting, especially if there are many values that need to be entered and/or updated.
+
+The tutorial assumes that you already have the new/updated data available in some format. It does not provide code for restructuring your data to meet the formatting requirements for upload either, as that code will be different for every case.
+
+What it does provide are step-wise instructions on how to write the data upload part of your workflow, as well as a few helper functions that may facilitate this task for you.
+
+## Before you begin: access and dependencies
+
+Before you get started, you should double-check that you have working login credentials for the Nature index database. You can do this by logging into the database online: <https://naturindeks.nina.no/> If you do not have login credentials yet or have trouble logging in, you can contact the Nature index coordination team by sending an email to [naturindeks\@nina.no](mailto:naturindeks@nina.no){.email}.
+
+The second thing you need to do is install the R pacakge "NIcalc" (<https://github.com/NINAnor/NIcalc>) and its dependencies. NIcalc was developed to handle tasks and calculations related to the Nature index for Norway; among other things, it contains functions for accessing the Nature index database directly from R. The package is not available on CRAN, and you therefore need to install it directly from GitHub, e.g. using the "devtools" package:
+
+```{r}
+if(!("NIcalc" %in% installed.packages())){
+  devtools::install_github("NINAnor/NIcalc", build_vignettes = T)
+}
+```
+
+In addition to "NIcalc", we are going to need the packages "dplyr" and "magrittr" installed. The latter also needs to be loaded into the environment for the helper functions to work as they should:
+
+```{r}
+library(magrittr)
+```
+
+Finally, we are going to source all the helper functions that are provided in the "R" folder so that they are readily available to us:
+
+```{r}
+sourceDir <- function(path, trace = TRUE, ...) {
+  for (nm in list.files(path, pattern = "[.][RrSsQq]$")) {
+    if(trace) cat(nm,":")
+    source(file.path(path, nm), ...)
+    if(trace) cat("\n")
+  }
+}
+sourceDir('R')
+```
+
+If you want to know more about the specific functions, you can check out the respective code files in the "R" folder and consult each functions's roxygen documentation.
+
+## Step 1: Download and check format of existing data
+
+We get started by downloading the existing data for our indicator from the Nature index database. Irrespective of whether we intend to just add a few new data entries or update the entire data set for our indicator of interest, the existing data will be our starting point (not least because the data we are going to upload has to have the exactly same format as the data we get when we download).
+
+The function `downloadData_NIdb()` retrieves existing data for us. The main argument of the function is `indicators`, which is a list of the Norwegian names of the relevant indicators. If you are unsure about the spelling of the names of your indicators, you can check it in the top left corner of the "Indicator" page in the database: ![Bla](images/IndicatorView_database.png)
+
+Our example indicator for this tutorial is the unicorn, entered in the Nature index database under its Norwegian name "Enhjørning". We work with this single-indicator example from here on, but you can also pass a vector of indicator names to the helper functions to do the operations for several indicators at once.
+
+To retrieve existing data, we call `downloadData_NIdb()`:
+
+```{r}
+oldIndicatorData <- downloadData_NIdb(indicators = "Enhjørning")
+```
+
+Once the function is called, a box will pop up asking you to enter first your registered email address and then your Nature index database password. If the credentials are added correctly, data will be downloaded. *Note*: We are aware that the interactive credential promps are not a good solution for (semi-) automated workflows. If you would like to bypass manually entering credentials, we recommend saving your login credentials as environmental variables and adapting `downloadData_NIdb()` to retrieve credentials form the environment instead of asking for them.
+
+Let's have a look at the structure of `oldIndicatorData`:
+
+```{r}
+str(oldIndicatorData)
+```
+
+It comes as a list that contains 1) a data frame called `indicatorValues` and a list called `customDistributions`. The `indicatorValues` table is relevant for everyone, while the `customDistributions` list will be irrelevant and empty for many indicators. For indicators that are reported with user-specified custom distributions for quantifying uncertainty in indicator data values, the `customDistributions` list will contain unique information characterizing each specified distribution.
+
+For now, we will focus on the `indicatorValues` table. The table has a row for each year in the period 1960-2024, as well as for the year 1950 and for the reference value ("Referanseverdi"). Most of the rows do not contain any data because traditionally, only data for the years directly linked to the periodic Nature index updates were added, i.e. 1990, 2000, 2010-2014, and 2019. The primary goal for the 2025 update is to add indicator data corresponding to the year 2024, but it is possible - and encouraged - to add data for "in-between" years as well if they are readily available. For looking more into the structure of `indicatorValues`, we'll focus first on the subset of years that have data available in the database at present:
+
+```{r}
+oldIndicatorData[[1]]$indicatorValues %>%
+  dplyr::filter(!is.na(verdi))
+```
+
+First, we have the indicators ID (`indicatorId`) and name (`indicatorName`), followed by the IDs and names of all areas for which the indicator has data (`areaId` and `areaName`). 
+Next are the ID and name/definition for each year in the data. The reference value is coded as `yearName = Referanseverdi`. The `yearID` is a dummy variable that was previously used for linking the correct years when uploading data from via NIcalc, but it is no longer in use - you do not need to worry about it (for new entries, you can leave it as `NA`).
+The next three columns hold the actual indicator data: `verdi` is the average indicator value, and `nedre_Kvartil` and `ovre_Kvartil` are the 25% and 75% quartiles of the uncertainty distribution for the indicator value. If your indicator's uncertainty has previously been quantified using a custom distribution (often the case for modelled indicators), `nedre_Kvartil` and `ovre_Kvartil` will be `NA`, and there will instead be an identifier in the column `customDistributionUUID`. Each distribution identifier will have a match in `oldIndicatorData$customDistributions`, where additional information on the distribution (type and parameter values) are stored. 
+After the values, we have a few columns that hold additional information on the data; `datatypeName` and `datatypeId` categorize indicator data into one of: 
+
+- `Ekspertvurdering` with ID 1
+- `Overvåkingsdata` with ID 2
+- `Beregnet fra modeller` with ID 3
+
+Not all data points necessarily have to arise from the same data type; quite often, the reference value is an expert judgement while the yearly indicator data may be monitoring data or modelled estimates. Sometimes, yearly indicator data are also a mixture of approaches. What should be the same for all data points, including the reference value, is `unitOfMeasurement`. 
+
+The remaining columns in the data download (`distributionName`, `distributionId`, `distParam1`, `distParam2`) are not relevant in most cases and not described in more detail here. 
+
+
+## Step 2: Prepare and format new/updated data
+In the next step, we need to i) format our new and/or updated indicator data to match the format of the downloaded data and ii) combine it with the previous data to prepare a complete new data upload. 
+
+
+## Step 3: Double-check values and formats
+
+## Step 4: Upload updated data
