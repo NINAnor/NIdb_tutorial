@@ -1,5 +1,5 @@
 # NIdb_tutorial
-This repository contains documentation, training material, and helper functions for entering data into the Nature index database ([www.naturindeks.nina.no](https://naturindeks.nina.no/)).
+This repository contains documentation, training material, and helper functions for entering data into the Nature index database (https://naturindeks.nina.no/).
 
 Helper functions can be found in the folder "R". 
 Instructions, including a worked example, can be found in "tutorial.Rmd".
