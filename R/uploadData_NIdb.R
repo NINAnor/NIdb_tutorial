@@ -13,48 +13,35 @@
 #' enter their NI database log-in credentials for that purpose. NI database 
 #' credentials consist of a registered email address and a password. 
 #' 
-#' @param species character string or vector of character strings containing
-#' the latin name of the species for which to upload/compare data
-#' @param data_path character string specifying the directory in which the 
-#' updated indicator data is stored.
+#' @param indicatorData a list containing updated indicator data in the same 
+#' format as data downloaded from the Nature index database. 
 #' 
 #' @return
 #' @export
 #'
 #' @examples
-uploadData_NIdb <- function(species, data_path){
-  
-  ## Load saved data if not present
-  
-  # Updated indicator data
-  if(!exists("updatedIndicatorData")){
-    updatedIndicatorData <- readRDS(paste0(data_path, "/updatedIndicatorData.rds"))
-    message('Updated indicator data loaded from file.')
-  }
+uploadData_NIdb <- function(indicatorData){
   
   ## Provide user credentials for NI database and request token
-  myUserName_NIdb <- rstudioapi::askForPassword("NI database username") # = NINA email address
+  myUserName_NIdb <- rstudioapi::askForPassword("NI database username")   
   myPassword_NIdb <- rstudioapi::askForPassword("NI database password")
   
   NIcalc::getToken(username = myUserName_NIdb,  
                    password = myPassword_NIdb,
-                   url = "https://www8.nina.no/NaturindeksAPITest"
-                   #url = "https://www8.nina.no/NaturindeksNiCalc"
+                   url = "https://www8.nina.no/NaturindeksNiCalc"
   )
   
   # Ask the user for confirmation to write to database
-  command <- askYesNo("Do you want to write to the database?", default = FALSE)
+  #command <- askYesNo("Do you want to write to the database?", default = FALSE)
   
   # Write to database if confirmed (halt execution otherwise)
   if(!is.na(command) & command){
     
     message("Uploading new indicator data to NI database:")
     
-    for(j in 1:length(species)){
-      message(species[j])
-      NIcalc::writeIndicatorValues(updatedIndicatorData[[j]])
-      #writeIndicatorValues(updatedIndicatorData[[j]])
-      
+    for(i in 1:length(indicatorData)){
+      message(names(indicatorData)[i])
+      NIcalc::writeIndicatorValues(indicatorData[[i]])
     }  
   }else{
     message("Function halted.")
