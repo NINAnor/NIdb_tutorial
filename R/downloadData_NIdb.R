@@ -41,7 +41,7 @@ downloadData_NIdb <- function(indicators, save = FALSE, save_path = getwd()){
     dplyr::right_join(data.frame(name = indicators), by = 'name')
   
   ## Check if user has access to indicator
-  if(is.na(myIndicators$id)){
+  if(any(is.na(myIndicators$id))){
     stop("You do not have access to the requested indicator(s). 
          To request access, contact NINA.")
   }
