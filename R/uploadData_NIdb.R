@@ -32,7 +32,7 @@ uploadData_NIdb <- function(indicatorData){
   )
   
   # Ask the user for confirmation to write to database
-  #command <- askYesNo("Do you want to write to the database?", default = FALSE)
+  command <- utils::askYesNo("Do you want to write to the database?", default = FALSE)
   
   # Write to database if confirmed (halt execution otherwise)
   if(!is.na(command) & command){
